@@ -1,0 +1,73 @@
+{
+  "realm": "poc-sso",
+  "enabled": true,
+  "displayName": "PoC SSO",
+  "accessTokenLifespan": 300,
+  "sslRequired": "none",
+  "roles": {
+    "realm": [
+      {"name": "user", "description": "Basic PoC user"},
+      {"name": "admin", "description": "Administrative PoC user"}
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "gateway-client",
+      "name": "Gateway Auth",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "gateway-secret",
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost:8000/auth/callback"],
+      "webOrigins": ["http://localhost:8000"],
+      "attributes": {"post.logout.redirect.uris": "http://localhost:3001/*"}
+    },
+    {
+      "clientId": "bff-client",
+      "name": "BFF",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "bff-secret",
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost:8083/auth/callback"],
+      "webOrigins": ["http://localhost:3002"],
+      "attributes": {"post.logout.redirect.uris": "http://localhost:3002/*"}
+    },
+    {
+      "clientId": "spa-client",
+      "name": "React keycloak-js",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost:3003/*"],
+      "webOrigins": ["http://localhost:3003"],
+      "attributes": {"post.logout.redirect.uris": "http://localhost:3003/*"}
+    }
+  ],
+  "users": [
+    {
+      "username": "user@test.local",
+      "email": "user@test.local",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [{"type": "password", "value": "user", "temporary": false}],
+      "realmRoles": ["user"]
+    },
+    {
+      "username": "admin@test.local",
+      "email": "admin@test.local",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [{"type": "password", "value": "admin", "temporary": false}],
+      "realmRoles": ["user", "admin"]
+    }
+  ]
+}

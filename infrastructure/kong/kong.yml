@@ -1,0 +1,17 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  - name: gateway-app
+    url: http://gateway-app:80
+    routes:
+      - name: gateway-ui
+        paths: ["/"]
+        strip_path: false
+  - name: gateway-auth
+    url: http://gateway-auth:8090
+    routes:
+      - name: gateway-auth-routes
+        paths: ["/auth", "/api"]
+        strip_path: false
+

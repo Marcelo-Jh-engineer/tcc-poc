@@ -1,0 +1,210 @@
+name: keycloak-sso-poc
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - private-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: start-dev --import-realm --http-port=8080
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      KC_DB_USERNAME: ${POSTGRES_USER}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - ./infrastructure/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    ports:
+      - "8180:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - public-net
+      - private-net
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  resource-api:
+    build: ./services/resource-api
+    environment:
+      QUARKUS_HTTP_PORT: 8081
+      QUARKUS_OIDC_AUTH_SERVER_URL: http://keycloak:8080/realms/${KEYCLOAK_REALM}
+      QUARKUS_OIDC_CLIENT_ID: resource-api
+      ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL}
+    ports:
+      - "8081:8081"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    networks:
+      - public-net
+      - private-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8081/api/public | grep -q public"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  internal-api:
+    build: ./services/internal-api
+    environment:
+      QUARKUS_HTTP_PORT: 8082
+    ports:
+      - "8082:8082"
+    networks:
+      - private-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8082/internal/data | grep -q internal"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  bff:
+    build: ./services/bff
+    environment:
+      QUARKUS_HTTP_PORT: 8083
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+      KEYCLOAK_PUBLIC_URL: http://localhost:8180
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+      OIDC_CLIENT_ID: bff-client
+      OIDC_CLIENT_SECRET: bff-secret
+      OIDC_REDIRECT_URI: http://localhost:8083/auth/callback
+      RESOURCE_API_URL: http://resource-api:8081
+      FRONTEND_ORIGIN: http://localhost:3002
+    ports:
+      - "8083:8083"
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      resource-api:
+        condition: service_healthy
+    networks:
+      - public-net
+      - private-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8083/auth/session | grep -q authenticated"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  bff-app:
+    build:
+      context: ./frontends/bff-app
+      args:
+        VITE_API_URL: http://localhost:8083
+        VITE_ARCHITECTURE: B
+    ports:
+      - "3002:80"
+    depends_on:
+      bff:
+        condition: service_healthy
+    networks:
+      - public-net
+
+  gateway-auth:
+    build: ./services/gateway-auth
+    environment:
+      QUARKUS_HTTP_PORT: 8090
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+      KEYCLOAK_PUBLIC_URL: http://localhost:8180
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+      OIDC_CLIENT_ID: gateway-client
+      OIDC_CLIENT_SECRET: gateway-secret
+      OIDC_REDIRECT_URI: http://localhost:8000/auth/callback
+      RESOURCE_API_URL: http://resource-api:8081
+      FRONTEND_ORIGIN: http://localhost:3001
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      resource-api:
+        condition: service_healthy
+    networks:
+      - public-net
+      - private-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8090/auth/session | grep -q authenticated"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  gateway-app:
+    build:
+      context: ./frontends/gateway-app
+      args:
+        VITE_API_URL: http://localhost:8000
+        VITE_ARCHITECTURE: A
+    depends_on:
+      gateway-auth:
+        condition: service_healthy
+    networks:
+      - public-net
+
+  kong:
+    image: kong:3.8
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /opt/kong/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+    volumes:
+      - ./infrastructure/kong/kong.yml:/opt/kong/kong.yml:ro
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    depends_on:
+      gateway-auth:
+        condition: service_healthy
+      gateway-app:
+        condition: service_started
+    networks:
+      - public-net
+      - private-net
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  c-app:
+    build: ./frontends/keycloak-js-app
+    ports:
+      - "3003:80"
+    depends_on:
+      resource-api:
+        condition: service_healthy
+    networks:
+      - public-net
+
+volumes:
+  postgres-data:
+
+networks:
+  public-net:
+    name: poc-public-net
+  private-net:
+    name: poc-private-net
+    internal: true
