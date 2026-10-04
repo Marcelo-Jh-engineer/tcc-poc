@@ -10,4 +10,5 @@ docs/evidence/**/request.txt
 docs/evidence/**/response.txt
 docs/evidence/**/docker-logs.txt
 docs/evidence/**/*.png
-
+/docs/
+/README.md
