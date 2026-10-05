@@ -83,8 +83,6 @@ services:
         MAVEN_PROXY_PORT: ${MAVEN_PROXY_PORT:-}
     environment:
       QUARKUS_HTTP_PORT: 8082
-    ports:
-      - "8082:8082"
     networks:
       - private-net
     healthcheck:
@@ -197,7 +195,6 @@ services:
       - ./infrastructure/kong/kong.yml:/opt/kong/kong.yml:ro
     ports:
       - "8000:8000"
-      - "8001:8001"
     depends_on:
       gateway-auth:
         condition: service_healthy
