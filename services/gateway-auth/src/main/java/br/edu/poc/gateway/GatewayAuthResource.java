@@ -74,7 +74,8 @@ public class GatewayAuthResource {
     public Response session(@CookieParam(COOKIE) String id) {
         if (id == null || id.isBlank()) return Response.ok(Map.of("authenticated", false)).build();
         Session session = sessions.get(id); if (session == null) return Response.ok(Map.of("authenticated", false)).build();
-        refreshIfNeeded(session); return Response.ok(Map.of("authenticated", true, "username", session.username, "roles", session.roles)).build();
+        if (!refreshIfNeeded(session)) { sessions.remove(id); return Response.ok(Map.of("authenticated", false)).header("Set-Cookie", cookie("", true)).build(); }
+        return Response.ok(Map.of("authenticated", true, "username", session.username, "roles", session.roles)).build();
     }
 
     @GET @Path("/auth/logout")
@@ -94,7 +95,7 @@ public class GatewayAuthResource {
     private Response proxy(String method, String path, String body, String id) {
         if (id == null || id.isBlank()) return Response.status(401).entity(Map.of("error", "not_authenticated")).build();
         Session session = sessions.get(id); if (session == null) return Response.status(401).entity(Map.of("error", "not_authenticated")).build();
-        refreshIfNeeded(session);
+        if (!refreshIfNeeded(session)) { sessions.remove(id); return Response.status(401).entity(Map.of("error", "session_expired")).header("Set-Cookie", cookie("", true)).build(); }
         try {
             HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(resourceApiUrl + "/api/" + path)).header("Authorization", "Bearer " + session.accessToken);
             if ("POST".equals(method)) builder.header("Content-Type", MediaType.APPLICATION_JSON).POST(HttpRequest.BodyPublishers.ofString(body == null ? "" : body)); else builder.GET();
@@ -111,10 +112,11 @@ public class GatewayAuthResource {
         return mapper.readTree(response.body());
     }
 
-    private void refreshIfNeeded(Session session) {
-        if (session.expiresAt > Instant.now().getEpochSecond() + 30 || session.refreshToken == null) return;
-        try { JsonNode token = tokenRequest("grant_type=refresh_token&refresh_token=" + enc(session.refreshToken)); Session next = sessionFrom(token); session.accessToken = next.accessToken; session.refreshToken = next.refreshToken == null ? session.refreshToken : next.refreshToken; session.expiresAt = next.expiresAt; }
-        catch (Exception e) { LOG.warn("refresh failed; existing session remains until expiry"); }
+    private boolean refreshIfNeeded(Session session) {
+        if (session.expiresAt > Instant.now().getEpochSecond() + 30) return true;
+        if (session.refreshToken == null) return false;
+        try { JsonNode token = tokenRequest("grant_type=refresh_token&refresh_token=" + enc(session.refreshToken)); Session next = sessionFrom(token); session.accessToken = next.accessToken; session.refreshToken = next.refreshToken == null ? session.refreshToken : next.refreshToken; session.expiresAt = next.expiresAt; return true; }
+        catch (Exception e) { LOG.warn("refresh failed; invalidating session"); return false; }
     }
 
     private Session sessionFrom(JsonNode token) throws Exception {
