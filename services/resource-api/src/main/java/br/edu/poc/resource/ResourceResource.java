@@ -14,6 +14,8 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
 
+import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -39,6 +41,19 @@ public class ResourceResource {
     public Map<String, String> protectedResource() {
         LOG.infof("service=resource-api path=/api/protected user=%s status=200", username());
         return Map.of("message", "protected");
+    }
+
+    @GET
+    @Path("/products")
+    @RolesAllowed("user")
+    public List<Product> products() {
+        LOG.infof("service=resource-api path=/api/products user=%s status=200", username());
+        return List.of(
+            new Product("Café Especial", new BigDecimal("29.90"), "☕", "Bebidas"),
+            new Product("Fone Bluetooth", new BigDecimal("199.90"), "🎧", "Eletrônicos"),
+            new Product("Mochila Urbana", new BigDecimal("149.90"), "🎒", "Acessórios"),
+            new Product("Livro de Segurança", new BigDecimal("89.90"), "📘", "Livros")
+        );
     }
 
     @GET
@@ -71,5 +86,7 @@ public class ResourceResource {
 
     public record MeResponse(String username, java.util.List<String> roles) {
     }
-}
 
+    public record Product(String name, BigDecimal price, String icon, String category) {
+    }
+}
