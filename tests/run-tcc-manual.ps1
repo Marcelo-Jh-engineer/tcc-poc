@@ -264,6 +264,8 @@ function Test-AuthenticatedFlows {
             $spa = Login-Spa $UserName $UserPassword
             $protected = Get-TokenApi $spa 'protected'
             Add-Result 'CT-01' 'C' $(if ($protected.Status -eq 200) { 'PASS' } else { 'FAIL' }) "protected=$($protected.Status)"
+            $adminEndpoint = Get-TokenApi $spa 'admin'
+            Add-Result 'CT-01' 'C-authorization' $(if ($adminEndpoint.Status -eq 403) { 'PASS' } else { 'FAIL' }) "user_admin=$($adminEndpoint.Status)"
             Add-Result 'CT-04' 'C' 'EVIDENCE_REVIEW_REQUIRED' 'Bearer_visible_in_browser_context'
             Add-Result 'CT-09' 'C' 'EVIDENCE_REVIEW_REQUIRED' 'JavaScript_exfiltration_requires_DevTools'
             Add-Result 'CT-17' 'C' 'EVIDENCE_REVIEW_REQUIRED' 'refresh_visibility_requires_DevTools'
@@ -349,6 +351,29 @@ try {
         }
     }
 
+    if ($Selection -eq 'all' -or $Selection -eq 'C') {
+        $spaFresh = Login-Spa $UserName $UserPassword
+        docker compose stop keycloak | Out-Null
+        try {
+            $existing = Get-TokenApi $spaFresh 'protected'
+            $newLoginStatus = 0
+            try {
+                $newAuth = Invoke-Http (New-HttpClient) 'GET' "http://localhost:8180/realms/$Realm/protocol/openid-connect/auth?client_id=spa-client&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A3003%2F"
+                $newLoginStatus = $newAuth.Status
+            } catch { }
+            Add-Result 'CT-14' 'C' 'OBSERVED' "existing_session=$($existing.Status);new_login=$newLoginStatus"
+        } finally {
+            docker compose start keycloak | Out-Null
+            for ($attempt = 0; $attempt -lt 30; $attempt++) {
+                try {
+                    $ready = Invoke-WebRequest -Uri 'http://localhost:8180/health/ready' -UseBasicParsing -TimeoutSec 2
+                    if ($ready.StatusCode -eq 200) { break }
+                } catch { }
+                Start-Sleep -Seconds 2
+            }
+        }
+    }
+
     $adminSessions = @{}
     foreach ($item in @(@{ Name = 'A'; Base = 'http://localhost:8000' }, @{ Name = 'B'; Base = 'http://localhost:8083' })) {
         if ($Selection -ne 'all' -and $Selection -ne $item.Name) { continue }
@@ -357,6 +382,14 @@ try {
         Set-AdminRole $Admin $AdminName $false
         $after = Get-Api $adminSessions[$item.Name] 'admin'
         Add-Result 'CT-18' $item.Name 'OBSERVED' "before=$($before.Status);after_role_removal=$($after.Status)"
+        Set-AdminRole $Admin $AdminName $true
+    }
+    if ($Selection -eq 'all' -or $Selection -eq 'C') {
+        $spaAdmin = Login-Spa $AdminName $AdminPassword
+        $before = Get-TokenApi $spaAdmin 'admin'
+        Set-AdminRole $Admin $AdminName $false
+        $after = Get-TokenApi $spaAdmin 'admin'
+        Add-Result 'CT-18' 'C' 'OBSERVED' "before=$($before.Status);after_role_removal=$($after.Status)"
         Set-AdminRole $Admin $AdminName $true
     }
 } catch {
