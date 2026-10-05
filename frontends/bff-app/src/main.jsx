@@ -5,6 +5,12 @@ import './style.css';
 const api = import.meta.env.VITE_API_URL;
 const architecture = import.meta.env.VITE_ARCHITECTURE || 'B';
 
+async function parseResponse(response) {
+  const text = await response.text();
+  if (!text) return {};
+  try { return JSON.parse(text); } catch { return { message: text }; }
+}
+
 function ProductGrid({ products, loading, error, authenticated, onLogin }) {
   if (!authenticated) return <div className="catalog-empty"><span className="empty-icon">[ ]</span><h3>Catalogo protegido</h3><p>Faca login para consultar os produtos.</p><button onClick={onLogin}>Entrar para visualizar</button></div>;
   if (loading) return <div className="catalog-empty"><span className="spinner" /><p>Carregando produtos...</p></div>;
@@ -33,18 +39,18 @@ function App() {
     if (!session.authenticated) { setProducts([]); return; }
     setCatalogLoading(true);
     setCatalogError(null);
-    fetch(`${api}/api/products`, { credentials: 'include' }).then(async response => { const body = await response.json(); if (!response.ok) throw new Error(body.message || `HTTP ${response.status}`); return body; }).then(setProducts).catch(error => setCatalogError(error.message)).finally(() => setCatalogLoading(false));
+    fetch(`${api}/api/products`, { credentials: 'include' }).then(async response => { const body = await parseResponse(response); if (!response.ok) { if (response.status === 401) setSession({ authenticated: false }); throw new Error(body.error || body.message || `HTTP ${response.status}`); } return body; }).then(setProducts).catch(error => setCatalogError(error.message)).finally(() => setCatalogLoading(false));
   }, [session.authenticated]);
 
   const login = () => { window.location.href = `${api}/auth/login`; };
   const logout = () => { window.location.href = `${api}/auth/logout`; };
-  const call = async endpoint => { const response = await fetch(`${api}/api/${endpoint}`, { credentials: 'include' }); setResult({ endpoint, status: response.status, body: await response.json() }); };
+  const call = async endpoint => { const response = await fetch(`${api}/api/${endpoint}`, { credentials: 'include' }); setResult({ endpoint, status: response.status, body: await parseResponse(response) }); };
   const visibleProducts = products.filter(product => product.name.toLowerCase().includes(searchTerm.toLowerCase().trim()));
   const createProduct = async event => {
     event.preventDefault();
     setFormError(null);
     const response = await fetch(`${api}/api/products`, { method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...draft, price: Number(draft.price) }) });
-    const body = await response.json();
+    const body = await parseResponse(response);
     if (!response.ok) { setFormError(body.message || `HTTP ${response.status}`); return; }
     setProducts(current => [...current, body]);
     setDraft({ name: '', price: '', icon: '*', category: '' });
