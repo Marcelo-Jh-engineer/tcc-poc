@@ -157,6 +157,8 @@ services:
     depends_on:
       gateway-auth:
         condition: service_healthy
+    ports:
+      - "3001:80"
     networks:
       - public-net
 

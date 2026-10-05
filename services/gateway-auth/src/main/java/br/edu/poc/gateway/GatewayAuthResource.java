@@ -66,6 +66,7 @@ public class GatewayAuthResource {
 
     @GET @Path("/auth/session")
     public Response session(@CookieParam(COOKIE) String id) {
+        if (id == null || id.isBlank()) return Response.ok(Map.of("authenticated", false)).build();
         Session session = sessions.get(id); if (session == null) return Response.ok(Map.of("authenticated", false)).build();
         refreshIfNeeded(session); return Response.ok(Map.of("authenticated", true, "username", session.username, "roles", session.roles)).build();
     }
@@ -123,4 +124,3 @@ public class GatewayAuthResource {
         Session(String accessToken, String refreshToken, String idToken, String username, Set<String> roles, long expiresAt) { this.accessToken = accessToken; this.refreshToken = refreshToken; this.idToken = idToken; this.username = username; this.roles = roles.stream().sorted().collect(Collectors.toSet()); this.expiresAt = expiresAt; }
     }
 }
-

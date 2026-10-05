@@ -8,9 +8,6 @@ RUN mvn -B package -DskipTests
 FROM eclipse-temurin:21-jre
 WORKDIR /deployments
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
-COPY --from=build /workspace/target/quarkus-app/lib/ /deployments/lib/
-COPY --from=build /workspace/target/quarkus-app/*.jar /deployments/
-COPY --from=build /workspace/target/quarkus-app/app/ /deployments/app/
-COPY --from=build /workspace/target/quarkus-app/quarkus/ /deployments/quarkus/
+COPY --from=build /workspace/target/quarkus-app/ /deployments/
 EXPOSE 8083
 ENTRYPOINT ["java", "-jar", "/deployments/quarkus-run.jar"]

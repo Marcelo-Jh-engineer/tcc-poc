@@ -88,6 +88,7 @@ public class SessionAuthResource {
     @GET
     @Path("/auth/session")
     public Response session(@CookieParam(COOKIE) String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) return Response.ok(Map.of("authenticated", false)).build();
         Session session = sessions.get(sessionId);
         if (session == null) return Response.ok(Map.of("authenticated", false)).build();
         refreshIfNeeded(session);
@@ -190,4 +191,3 @@ public class SessionAuthResource {
         }
     }
 }
-

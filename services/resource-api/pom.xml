@@ -27,6 +27,7 @@
   <dependencies>
     <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-arc</artifactId></dependency>
     <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-rest-jackson</artifactId></dependency>
+    <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-vertx-http</artifactId></dependency>
     <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-oidc</artifactId></dependency>
     <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-smallrye-health</artifactId></dependency>
     <dependency><groupId>io.quarkus</groupId><artifactId>quarkus-junit5</artifactId><scope>test</scope></dependency>
@@ -34,10 +35,9 @@
   </dependencies>
   <build>
     <plugins>
-      <plugin><groupId>io.quarkus</groupId><artifactId>quarkus-maven-plugin</artifactId><version>${quarkus.platform.version}</version><extensions>true</extensions></plugin>
+      <plugin><groupId>io.quarkus</groupId><artifactId>quarkus-maven-plugin</artifactId><version>${quarkus.platform.version}</version><extensions>true</extensions><executions><execution><goals><goal>build</goal></goals></execution></executions></plugin>
       <plugin><artifactId>maven-compiler-plugin</artifactId><version>3.13.0</version></plugin>
       <plugin><artifactId>maven-surefire-plugin</artifactId><version>3.5.2</version></plugin>
     </plugins>
   </build>
 </project>
-
