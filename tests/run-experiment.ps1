@@ -28,6 +28,10 @@ function Get-HttpStatus([string]$Url, [string[]]$Headers = @(), [string]$Method 
     return (& curl.exe @arguments).Trim()
 }
 
+function Test-HostPortClosed([int]$Port) {
+    return -not (Test-NetConnection localhost -Port $Port -InformationLevel Quiet -WarningAction SilentlyContinue)
+}
+
 function Save-Response([string]$Url, [string]$OutputFile, [string[]]$Headers = @(), [string]$Method = 'GET') {
     $arguments = @('-sS', '-D', "$OutputFile.headers", '-o', "$OutputFile.body", '-X', $Method)
     foreach ($header in $Headers) { $arguments += @('-H', $header) }
@@ -81,6 +85,12 @@ function Invoke-Architecture([string]$Architecture, [string]$BaseUrl, [string]$C
     $internalStatus = (& docker compose exec -T bff sh -c "curl -sS -o /dev/null -w '%{http_code}' http://internal-api:8082/internal/data").Trim()
     Add-Result 'CT-11' $Architecture $(if ($internalStatus -eq '200') { 'PASS' } else { 'FAIL' }) "east_west=$internalStatus;host_port=not_published" (Join-Path $architectureDir 'internal-api.txt')
     $internalStatus | Set-Content (Join-Path $architectureDir 'internal-api.txt')
+
+    $internalPortClosed = Test-HostPortClosed 8082
+    Add-Result 'CT-11' "$Architecture-host-surface" $(if ($internalPortClosed) { 'PASS' } else { 'FAIL' }) "internal_api_8082_closed=$internalPortClosed" (Join-Path $architectureDir 'internal-api-host-port.txt')
+
+    $kongAdminClosed = Test-HostPortClosed 8001
+    Add-Result 'CT-22' $Architecture $(if ($kongAdminClosed) { 'PASS' } else { 'FAIL' }) "kong_admin_8001_closed=$kongAdminClosed" (Join-Path $architectureDir 'kong-admin-port.txt')
 
     $corsStatus = Get-HttpStatus "$BaseUrl/api/preferences" @('Origin: http://evil.test', 'Access-Control-Request-Method: POST', 'Access-Control-Request-Headers: content-type') 'OPTIONS'
     Add-Result 'CT-16' $Architecture 'OBSERVED' "evil_origin_preflight=$corsStatus" (Join-Path $architectureDir 'csrf-preflight.txt')
