@@ -22,6 +22,8 @@ import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
@@ -48,7 +50,7 @@ public class SessionAuthResource {
     @Inject ObjectMapper mapper;
     private final HttpClient http = HttpClient.newHttpClient();
     private final Map<String, Session> sessions = new ConcurrentHashMap<>();
-    private final Map<String, Long> states = new ConcurrentHashMap<>();
+    private final Map<String, LoginState> states = new ConcurrentHashMap<>();
 
     @PostConstruct
     void init() {
@@ -59,10 +61,12 @@ public class SessionAuthResource {
     @Path("/auth/login")
     public Response login() {
         String state = UUID.randomUUID().toString();
-        states.put(state, System.currentTimeMillis() + 300_000);
+        String verifier = codeVerifier();
+        states.put(state, new LoginState(System.currentTimeMillis() + 300_000, verifier));
         String endpoint = keycloakPublicUrl + "/realms/" + realm + "/protocol/openid-connect/auth";
         String url = endpoint + "?client_id=" + enc(clientId) + "&response_type=code&scope=openid%20profile%20email"
-                + "&redirect_uri=" + enc(redirectUri) + "&state=" + enc(state);
+                + "&redirect_uri=" + enc(redirectUri) + "&state=" + enc(state)
+                + "&code_challenge=" + enc(codeChallenge(verifier)) + "&code_challenge_method=S256";
         return Response.seeOther(URI.create(url)).build();
     }
 
@@ -70,11 +74,13 @@ public class SessionAuthResource {
     @Path("/auth/callback")
     public Response callback(@QueryParam("code") String code, @QueryParam("state") String state,
                              @QueryParam("error") String error) {
-        if (error != null || code == null || states.remove(state) == null) {
+        LoginState loginState = state == null ? null : states.remove(state);
+        if (error != null || code == null || loginState == null || loginState.expiresAt < System.currentTimeMillis()) {
             return Response.status(Response.Status.BAD_REQUEST).entity(Map.of("error", "invalid_oidc_callback")).build();
         }
         try {
-            JsonNode token = tokenRequest("grant_type=authorization_code&code=" + enc(code) + "&redirect_uri=" + enc(redirectUri));
+            JsonNode token = tokenRequest("grant_type=authorization_code&code=" + enc(code) + "&redirect_uri=" + enc(redirectUri)
+                    + "&code_verifier=" + enc(loginState.verifier));
             String sessionId = UUID.randomUUID().toString();
             sessions.put(sessionId, sessionFrom(token));
             return Response.seeOther(URI.create("http://localhost:3002/?login=success"))
@@ -177,9 +183,27 @@ public class SessionAuthResource {
     }
 
     private String tokenEndpoint() { return keycloakInternalUrl + "/realms/" + realm + "/protocol/openid-connect/token"; }
+    private static String codeVerifier() {
+        byte[] bytes = new byte[32];
+        new SecureRandom().nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+    private static String codeChallenge(String verifier) {
+        try {
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII)));
+        } catch (Exception exception) {
+            throw new IllegalStateException("unable to create PKCE challenge", exception);
+        }
+    }
     private static String enc(String value) { return URLEncoder.encode(value, StandardCharsets.UTF_8); }
     private static String cookie(String value, boolean expired) { return COOKIE + "=" + value + "; Path=/; HttpOnly; SameSite=Lax" + (expired ? "; Max-Age=0" : ""); }
     private static String expiredCookie() { return cookie("", true); }
+
+    private static final class LoginState {
+        final long expiresAt;
+        final String verifier;
+        LoginState(long expiresAt, String verifier) { this.expiresAt = expiresAt; this.verifier = verifier; }
+    }
 
     private static final class Session {
         volatile String accessToken;
