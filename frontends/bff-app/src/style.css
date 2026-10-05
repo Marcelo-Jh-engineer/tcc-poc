@@ -53,3 +53,16 @@ h2 { margin: 8px 0 0; color: #18332d; font-size: 25px; letter-spacing: -.04em; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (max-width: 760px) { .site-header { width: calc(100% - 30px); min-height: 74px; gap: 10px; }.main-nav { order: 3; width: 100%; justify-content: center; }.site-header { flex-wrap: wrap; padding: 12px 0; }.hero { width: calc(100% - 30px); padding: 42px 26px; margin-top: 15px; }.hero-art { display: none; }.catalog-section, .diagnostics { width: calc(100% - 30px); margin-top: 45px; }.product-grid { grid-template-columns: repeat(2, 1fr); }.section-heading { align-items: start; flex-direction: column; }.site-footer { width: calc(100% - 30px); flex-direction: column; }.site-footer div { flex-direction: column; gap: 5px; } }
 @media (max-width: 420px) { .product-grid { grid-template-columns: 1fr; }.user-chip { display: none; }.hero h1 { font-size: 39px; } }
+.protected-nav { display: flex; gap: 12px; margin-left: 10px; padding-left: 14px; border-left: 1px solid #c9ddd3; }
+.protected-nav button { color: #52786b; font-size: 11px; }
+.catalog-toolbar { display: flex; align-items: end; justify-content: space-between; gap: 14px; margin: 0 0 18px; }
+.search-field { flex: 1; max-width: 390px; color: #789087; font: 10px 'DM Mono', monospace; }
+.search-field span { display: block; margin-bottom: 7px; text-transform: uppercase; letter-spacing: .08em; }
+.search-field input, .product-form input { width: 100%; padding: 11px 13px; border: 1px solid #d7e7df; border-radius: 8px; outline: none; color: #18332d; background: #fff; font: 12px 'Manrope', sans-serif; }
+.search-field input:focus, .product-form input:focus { border-color: #167b61; box-shadow: 0 0 0 3px #167b6117; }
+.product-form { margin: 0 0 18px; padding: 20px; border: 1px solid #d7e7df; border-radius: 14px; background: #edf6f0; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 13px; }
+.product-form label { color: #52786b; font: 10px 'DM Mono', monospace; text-transform: uppercase; }
+.product-form input { display: block; margin-top: 7px; }
+.form-error { color: #a55345; font-size: 12px; }
+@media (max-width: 760px) { .protected-nav { width: 100%; justify-content: center; margin: 0; padding: 7px 0 0; border-left: 0; border-top: 1px solid #c9ddd3; }.catalog-toolbar { align-items: stretch; flex-direction: column; }.search-field { max-width: none; }.form-row { grid-template-columns: 1fr; gap: 10px; } }
