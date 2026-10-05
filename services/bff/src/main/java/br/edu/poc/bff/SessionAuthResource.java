@@ -98,7 +98,7 @@ public class SessionAuthResource {
     @GET
     @Path("/auth/logout")
     public Response logout(@CookieParam(COOKIE) String sessionId) {
-        Session session = sessions.remove(sessionId);
+        Session session = sessionId == null || sessionId.isBlank() ? null : sessions.remove(sessionId);
         String redirect = "http://localhost:3002/?logout=success";
         String logout = keycloakPublicUrl + "/realms/" + realm + "/protocol/openid-connect/logout"
                 + "?client_id=" + enc(clientId) + "&post_logout_redirect_uri=" + enc(redirect);
@@ -120,6 +120,9 @@ public class SessionAuthResource {
     }
 
     private Response proxy(String method, String path, String body, String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) {
+            return Response.status(Response.Status.UNAUTHORIZED).entity(Map.of("error", "not_authenticated")).build();
+        }
         Session session = sessions.get(sessionId);
         if (session == null) return Response.status(Response.Status.UNAUTHORIZED).entity(Map.of("error", "not_authenticated")).build();
         refreshIfNeeded(session);
