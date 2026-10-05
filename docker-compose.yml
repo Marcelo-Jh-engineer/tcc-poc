@@ -55,10 +55,15 @@ services:
       QUARKUS_HTTP_PORT: 8081
       QUARKUS_OIDC_AUTH_SERVER_URL: http://keycloak:8080/realms/${KEYCLOAK_REALM}
       QUARKUS_OIDC_CLIENT_ID: resource-api
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      QUARKUS_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      QUARKUS_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL}
     ports:
       - "8081:8081"
     depends_on:
+      postgres:
+        condition: service_healthy
       keycloak:
         condition: service_healthy
     networks:
