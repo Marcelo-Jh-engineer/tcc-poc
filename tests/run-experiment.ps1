@@ -58,6 +58,10 @@ function Invoke-Architecture([string]$Architecture, [string]$BaseUrl, [string]$C
     Add-Result 'CT-07' $Architecture $(if ($protectedStatus -eq '401') { 'PASS' } else { 'FAIL' }) "anonymous=$protectedStatus" (Join-Path $architectureDir 'protected-anonymous.txt')
     Save-Response "$BaseUrl/api/protected" (Join-Path $architectureDir 'protected-anonymous.txt')
 
+    $productsStatus = Get-HttpStatus "$BaseUrl/api/products"
+    Add-Result 'CT-21' $Architecture $(if ($productsStatus -eq '401') { 'PASS' } else { 'FAIL' }) "catalog_anonymous=$productsStatus" (Join-Path $architectureDir 'products-anonymous.txt')
+    Save-Response "$BaseUrl/api/products" (Join-Path $architectureDir 'products-anonymous.txt')
+
     $invalidSessionStatus = Get-HttpStatus "$BaseUrl/api/protected" @("Cookie: $CookieName=invalid-session")
     Add-Result 'CT-07' "$Architecture-session" $(if ($invalidSessionStatus -eq '401') { 'PASS' } else { 'FAIL' }) "invalid_session=$invalidSessionStatus" (Join-Path $architectureDir 'invalid-session.txt')
     Save-Response "$BaseUrl/api/protected" (Join-Path $architectureDir 'invalid-session.txt') @("Cookie: $CookieName=invalid-session")
