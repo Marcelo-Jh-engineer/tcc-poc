@@ -6,6 +6,12 @@ import './style.css';
 const api = 'http://localhost:8081';
 const keycloak = new Keycloak({ url: 'http://localhost:8180', realm: 'poc-sso', clientId: 'spa-client' });
 
+async function parseResponse(response) {
+  const text = await response.text();
+  if (!text) return {};
+  try { return JSON.parse(text); } catch { return { message: text }; }
+}
+
 function ProductGrid({ products, loading, error, authenticated, onLogin }) {
   if (!authenticated) return <div className="catalog-empty"><span className="empty-icon">[ ]</span><h3>Catalog protected</h3><p>Login to query products from the Resource Server.</p><button onClick={onLogin}>Login to view</button></div>;
   if (loading) return <div className="catalog-empty"><span className="spinner" /><p>Loading products...</p></div>;
@@ -32,17 +38,17 @@ function App() {
   useEffect(() => {
     if (!session.authenticated) { setProducts([]); return; }
     setCatalogLoading(true); setCatalogError(null);
-    client.current.updateToken(30).then(() => fetch(`${api}/api/products`, { headers: { Authorization: `Bearer ${client.current.token}` } })).then(async response => { const body = await response.json(); if (!response.ok) throw new Error(body.message || `HTTP ${response.status}`); return body; }).then(setProducts).catch(error => setCatalogError(error.message)).finally(() => setCatalogLoading(false));
+    client.current.updateToken(30).then(() => fetch(`${api}/api/products`, { headers: { Authorization: `Bearer ${client.current.token}` } })).then(async response => { const body = await parseResponse(response); if (!response.ok) { if (response.status === 401) setSession({ authenticated: false }); throw new Error(body.error || body.message || `HTTP ${response.status}`); } return body; }).then(setProducts).catch(error => setCatalogError(error.message)).finally(() => setCatalogLoading(false));
   }, [session.authenticated]);
 
   const login = () => client.current.login();
   const logout = () => client.current.logout({ redirectUri: window.location.origin });
-  const call = async endpoint => { await client.current.updateToken(30); const response = await fetch(`${api}/api/${endpoint}`, { headers: { Authorization: `Bearer ${client.current.token}` } }); setResult({ endpoint, status: response.status, body: await response.json() }); };
+  const call = async endpoint => { await client.current.updateToken(30); const response = await fetch(`${api}/api/${endpoint}`, { headers: { Authorization: `Bearer ${client.current.token}` } }); setResult({ endpoint, status: response.status, body: await parseResponse(response) }); };
   const visibleProducts = products.filter(product => product.name.toLowerCase().includes(searchTerm.toLowerCase().trim()));
   const createProduct = async event => {
     event.preventDefault(); setFormError(null); await client.current.updateToken(30);
     const response = await fetch(`${api}/api/products`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${client.current.token}` }, body: JSON.stringify({ ...draft, price: Number(draft.price) }) });
-    const body = await response.json();
+    const body = await parseResponse(response);
     if (!response.ok) { setFormError(body.message || `HTTP ${response.status}`); return; }
     setProducts(current => [...current, body]); setDraft({ name: '', price: '', icon: '*', category: '' }); setShowProductForm(false);
   };
