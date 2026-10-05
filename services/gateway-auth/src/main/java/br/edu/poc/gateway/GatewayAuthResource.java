@@ -73,7 +73,7 @@ public class GatewayAuthResource {
 
     @GET @Path("/auth/logout")
     public Response logout(@CookieParam(COOKIE) String id) {
-        Session session = sessions.remove(id); String redirect = "http://localhost:3001/?logout=success";
+        Session session = id == null || id.isBlank() ? null : sessions.remove(id); String redirect = "http://localhost:3001/?logout=success";
         String url = keycloakPublicUrl + "/realms/" + realm + "/protocol/openid-connect/logout?client_id=" + enc(clientId) + "&post_logout_redirect_uri=" + enc(redirect);
         if (session != null && session.idToken != null) url += "&id_token_hint=" + enc(session.idToken);
         return Response.seeOther(URI.create(url)).header("Set-Cookie", cookie("", true)).build();
@@ -86,6 +86,7 @@ public class GatewayAuthResource {
     public Response postApi(@PathParam("path") String path, String body, @CookieParam(COOKIE) String id) { return proxy("POST", path, body, id); }
 
     private Response proxy(String method, String path, String body, String id) {
+        if (id == null || id.isBlank()) return Response.status(401).entity(Map.of("error", "not_authenticated")).build();
         Session session = sessions.get(id); if (session == null) return Response.status(401).entity(Map.of("error", "not_authenticated")).build();
         refreshIfNeeded(session);
         try {
