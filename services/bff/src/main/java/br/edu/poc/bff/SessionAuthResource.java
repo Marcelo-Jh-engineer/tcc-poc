@@ -97,7 +97,10 @@ public class SessionAuthResource {
         if (sessionId == null || sessionId.isBlank()) return Response.ok(Map.of("authenticated", false)).build();
         Session session = sessions.get(sessionId);
         if (session == null) return Response.ok(Map.of("authenticated", false)).build();
-        refreshIfNeeded(session);
+        if (!refreshIfNeeded(session)) {
+            sessions.remove(sessionId);
+            return Response.ok(Map.of("authenticated", false)).header("Set-Cookie", expiredCookie()).build();
+        }
         return Response.ok(Map.of("authenticated", true, "username", session.username, "roles", session.roles)).build();
     }
 
@@ -131,7 +134,10 @@ public class SessionAuthResource {
         }
         Session session = sessions.get(sessionId);
         if (session == null) return Response.status(Response.Status.UNAUTHORIZED).entity(Map.of("error", "not_authenticated")).build();
-        refreshIfNeeded(session);
+        if (!refreshIfNeeded(session)) {
+            sessions.remove(sessionId);
+            return Response.status(Response.Status.UNAUTHORIZED).entity(Map.of("error", "session_expired")).header("Set-Cookie", expiredCookie()).build();
+        }
         try {
             HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(resourceApiUrl + "/api/" + path))
                     .header("Authorization", "Bearer " + session.accessToken);
@@ -155,16 +161,19 @@ public class SessionAuthResource {
         return mapper.readTree(response.body());
     }
 
-    private void refreshIfNeeded(Session session) {
-        if (session.expiresAt > Instant.now().getEpochSecond() + 30 || session.refreshToken == null) return;
+    private boolean refreshIfNeeded(Session session) {
+        if (session.expiresAt > Instant.now().getEpochSecond() + 30) return true;
+        if (session.refreshToken == null) return false;
         try {
             JsonNode token = tokenRequest("grant_type=refresh_token&refresh_token=" + enc(session.refreshToken));
             Session updated = sessionFrom(token);
             session.accessToken = updated.accessToken;
             session.refreshToken = updated.refreshToken == null ? session.refreshToken : updated.refreshToken;
             session.expiresAt = updated.expiresAt;
+            return true;
         } catch (Exception exception) {
-            LOG.warn("refresh failed; existing session remains until expiry");
+            LOG.warn("refresh failed; invalidating session");
+            return false;
         }
     }
 
